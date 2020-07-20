@@ -173,20 +173,20 @@ def RC4_encrypt(key, plaintext):
         S[i], S[j] = S[j], S[i]
     i, j = 0, 0
     retval = []
-    for x in range(len(plaintext)):
+    for item in plaintext:
         i = (i + 1) % 256
         j = (j + S[i]) % 256
         S[i], S[j] = S[j], S[i]
         t = S[(S[i] + S[j]) % 256]
-        retval.append(b_(chr(ord_(plaintext[x]) ^ t)))
+        retval.append(b_(chr(ord_(item) ^ t)))
     return b_("").join(retval)
 
 
 def matrixMultiply(a, b):
-    return [[sum([float(i)*float(j)
-                  for i, j in zip(row, col)]
-                ) for col in zip(*b)]
-            for row in a]
+    return [
+        [sum(float(i) * float(j) for i, j in zip(row, col)) for col in zip(*b)]
+        for row in a
+    ]
 
 
 def markLocation(stream):
@@ -249,13 +249,10 @@ def u_(s):
 
 
 def str_(b):
-    if sys.version_info[0] < 3:
-        return b
+    if sys.version_info[0] >= 3 and type(b) == bytes:
+        return b.decode('latin-1')
     else:
-        if type(b) == bytes:
-            return b.decode('latin-1')
-        else:
-            return b
+        return b
 
 
 def ord_(b):

@@ -72,8 +72,7 @@ class XmpInformation(PdfObject):
                 attr = desc.getAttributeNodeNS(namespace, name)
                 if attr != None:
                     yield attr
-                for element in desc.getElementsByTagNameNS(namespace, name):
-                    yield element
+                yield from desc.getElementsByTagNameNS(namespace, name)
 
     def getNodesInNamespace(self, aboutUri, namespace):
         for desc in self.rdfRoot.getElementsByTagNameNS(RDF_NAMESPACE, "Description"):

@@ -135,7 +135,7 @@ class PdfFileMerger(object):
             pdfr._decryption_key = decryption_key
 
         # Find the range of pages to merge.
-        if pages == None:
+        if pages is None:
             pages = (0, pdfr.getNumPages())
         elif isinstance(pages, PageRange):
             pages = pages.indices(pdfr.getNumPages())
@@ -151,11 +151,7 @@ class PdfFileMerger(object):
             outline = pdfr.getOutlines()
             outline = self._trim_outline(pdfr, outline, pages)
 
-        if bookmark:
-            self.bookmarks += [bookmark, outline]
-        else:
-            self.bookmarks += outline
-
+        self.bookmarks += [bookmark, outline] if bookmark else outline
         dests = pdfr.namedDestinations
         dests = self._trim_dests(pdfr, dests, pages)
         self.named_dests += dests
@@ -346,7 +342,7 @@ class PdfFileMerger(object):
 
     def _write_bookmarks(self, bookmarks=None, parent=None):
 
-        if bookmarks == None:
+        if bookmarks is None:
             bookmarks = self.bookmarks
 
         last_added = None
@@ -364,13 +360,13 @@ class PdfFileMerger(object):
                         args = [NumberObject(p.id), NameObject(b['/Type'])]
                         #nothing more to add
                         #if b['/Type'] == '/Fit' or b['/Type'] == '/FitB'
-                        if b['/Type'] == '/FitH' or b['/Type'] == '/FitBH':
+                        if b['/Type'] in ['/FitH', '/FitBH']:
                             if '/Top' in b and not isinstance(b['/Top'], NullObject):
                                 args.append(FloatObject(b['/Top']))
                             else:
                                 args.append(FloatObject(0))
                             del b['/Top']
-                        elif b['/Type'] == '/FitV' or b['/Type'] == '/FitBV':
+                        elif b['/Type'] in ['/FitV', '/FitBV']:
                             if '/Left' in b and not isinstance(b['/Left'], NullObject):
                                 args.append(FloatObject(b['/Left']))
                             else:
@@ -436,7 +432,7 @@ class PdfFileMerger(object):
                 raise ValueError("Unresolved named destination '%s'" % (nd['/Title'],))
 
     def _associate_bookmarks_to_pages(self, pages, bookmarks=None):
-        if bookmarks == None:
+        if bookmarks is None:
             bookmarks = self.bookmarks
 
         for b in bookmarks:
@@ -460,7 +456,7 @@ class PdfFileMerger(object):
                 raise ValueError("Unresolved bookmark '%s'" % (b['/Title'],))
 
     def findBookmark(self, bookmark, root=None):
-        if root == None:
+        if root is None:
             root = self.bookmarks
 
         for i, b in enumerate(root):
@@ -491,7 +487,7 @@ class PdfFileMerger(object):
 
         dest = Bookmark(TextStringObject(title), NumberObject(pagenum), NameObject('/FitH'), NumberObject(826))
 
-        if parent == None:
+        if parent is None:
             self.bookmarks.append(dest)
         else:
             bmparent = self.bookmarks

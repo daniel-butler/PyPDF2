@@ -69,7 +69,7 @@ def readObject(stream, pdf):
     elif idx == 2:
         # array object
         return ArrayObject.readFromStream(stream, pdf)
-    elif idx == 3 or idx == 4:
+    elif idx in [3, 4]:
         # boolean object
         return BooleanObject.readFromStream(stream)
     elif idx == 5:
@@ -286,7 +286,6 @@ def createStringObject(string):
             if string.startswith(codecs.BOM_UTF16_BE):
                 retval = TextStringObject(string.decode("utf-16"))
                 retval.autodetect_utf16 = True
-                return retval
             else:
                 # This is probably a big performance hit here, but we need to
                 # convert string objects into the text/unicode-aware version if
@@ -294,7 +293,7 @@ def createStringObject(string):
                 # to try.  Some strings are strings, some are just byte arrays.
                 retval = TextStringObject(decode_pdfdocencoding(string))
                 retval.autodetect_pdfdocencoding = True
-                return retval
+            return retval
         except UnicodeDecodeError:
             return ByteStringObject(string)
     else:
@@ -371,7 +370,7 @@ def readStringFromStream(stream):
                     # Three octal digits shall be used, with leading zeros
                     # as needed, if the next character of the string is also
                     # a digit." (PDF reference 7.3.4.2, p 16)
-                    for i in range(2):
+                    for _ in range(2):
                         ntok = stream.read(1)
                         if ntok.isdigit():
                             tok += ntok
@@ -383,7 +382,7 @@ def readStringFromStream(stream):
                     # break occurs.  If it's a multi-char EOL, consume the
                     # second character:
                     tok = stream.read(1)
-                    if not tok in b_("\n\r"):
+                    if tok not in b_("\n\r"):
                         stream.seek(-1, 1)
                     # Then don't add anything to the actual string, since this
                     # line break was escaped:
@@ -527,7 +526,7 @@ class DictionaryObject(dict, PdfObject):
     # return None if no metadata was found on the document root.
     def getXmpMetadata(self):
         metadata = self.get("/Metadata", None)
-        if metadata == None:
+        if metadata is None:
             return None
         metadata = metadata.getObject()
         from . import xmp
@@ -706,7 +705,7 @@ class TreeObject(DictionaryObject):
         last = lastRef.getObject()
         while cur != None:
             if cur == childObj:
-                if prev == None:
+                if prev is None:
                     if NameObject('/Next') in cur:
                         # Removing first tree node
                         nextRef = cur[NameObject('/Next')]
@@ -729,13 +728,12 @@ class TreeObject(DictionaryObject):
                         next = nextRef.getObject()
                         next[NameObject('/Prev')] = prevRef
                         prev[NameObject('/Next')] = nextRef
-                        self[NameObject('/Count')] = self[NameObject('/Count')] - 1
                     else:
                         # Removing last tree node
                         assert cur == last
                         del prev[NameObject('/Next')]
                         self[NameObject('/Last')] = prevRef
-                        self[NameObject('/Count')] = self[NameObject('/Count')] - 1
+                    self[NameObject('/Count')] = self[NameObject('/Count')] - 1
                 found = True
                 break
 
@@ -791,10 +789,7 @@ class StreamObject(DictionaryObject):
         stream.write(b_("\nendstream"))
 
     def initializeFromDictionary(data):
-        if "/Filter" in data:
-            retval = EncodedStreamObject()
-        else:
-            retval = DecodedStreamObject()
+        retval = EncodedStreamObject() if "/Filter" in data else DecodedStreamObject()
         retval._data = data["__streamdata__"]
         del data["__streamdata__"]
         del data["/Length"]
@@ -842,7 +837,7 @@ class EncodedStreamObject(StreamObject):
 
             decoded._data = filters.decodeStreamData(self)
             for key, value in list(self.items()):
-                if not key in ("/Length", "/Filter", "/DecodeParms"):
+                if key not in ("/Length", "/Filter", "/DecodeParms"):
                     decoded[key] = value
             self.decodedSelf = decoded
             return decoded._data
@@ -1061,9 +1056,7 @@ class Destination(TreeObject):
             self[NameObject("/Top")], = args
         elif typ in ["/FitV", "/FitBV"]:
             self[NameObject("/Left")], = args
-        elif typ in ["/Fit", "/FitB"]:
-            pass
-        else:
+        elif typ not in ["/Fit", "/FitB"]:
             raise utils.PdfReadError("Unknown Destination Type: %r" % typ)
 
     def getDestArray(self):
