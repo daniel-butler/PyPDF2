@@ -252,13 +252,11 @@ class LZWDecode(object):
                     if cW < self.dictlen:
                         baos += self.dict[cW]
                         p=self.dict[pW]+self.dict[cW][0]
-                        self.dict[self.dictlen]=p
-                        self.dictlen+=1
                     else:
                         p=self.dict[pW]+self.dict[pW][0]
                         baos+=p
-                        self.dict[self.dictlen] = p;
-                        self.dictlen+=1
+                    self.dict[self.dictlen]=p
+                    self.dictlen+=1
                     if (self.dictlen >= (1 << self.bitspercode) - 1 and
                         self.bitspercode < 12):
                         self.bitspercode+=1
@@ -358,11 +356,7 @@ class JPXDecode(object):
 class CCITTFaxDecode(object):   
     def decode(data, decodeParms=None, height=0):
         if decodeParms:
-            if decodeParms.get("/K", 1) == -1:
-                CCITTgroup = 4
-            else:
-                CCITTgroup = 3
-        
+            CCITTgroup = 4 if decodeParms.get("/K", 1) == -1 else 3
         width = decodeParms["/Columns"]
         imgSize = len(data)
         tiff_header_struct = '<' + '2s' + 'h' + 'l' + 'h' + 'hhll' * 8 + 'h'
@@ -381,7 +375,7 @@ class CCITTFaxDecode(object):
                            279, 4, 1, imgSize,  # StripByteCounts, LONG, 1, size of image
                            0  # last IFD
                            )
-        
+
         return tiffHeader + data
     
     decode = staticmethod(decode)
@@ -397,13 +391,13 @@ def decodeStreamData(stream):
     # If there is not data to decode we should not try to decode the data.
     if data:
         for filterType in filters:
-            if filterType == "/FlateDecode" or filterType == "/Fl":
+            if filterType in ["/FlateDecode", "/Fl"]:
                 data = FlateDecode.decode(data, stream.get("/DecodeParms"))
-            elif filterType == "/ASCIIHexDecode" or filterType == "/AHx":
+            elif filterType in ["/ASCIIHexDecode", "/AHx"]:
                 data = ASCIIHexDecode.decode(data)
-            elif filterType == "/LZWDecode" or filterType == "/LZW":
+            elif filterType in ["/LZWDecode", "/LZW"]:
                 data = LZWDecode.decode(data, stream.get("/DecodeParms"))
-            elif filterType == "/ASCII85Decode" or filterType == "/A85":
+            elif filterType in ["/ASCII85Decode", "/A85"]:
                 data = ASCII85Decode.decode(data)
             elif filterType == "/DCTDecode":
                 data = DCTDecode.decode(data)
@@ -414,9 +408,7 @@ def decodeStreamData(stream):
                 data = CCITTFaxDecode.decode(data, stream.get("/DecodeParms"), height)
             elif filterType == "/Crypt":
                 decodeParams = stream.get("/DecodeParams", {})
-                if "/Name" not in decodeParams and "/Type" not in decodeParams:
-                    pass
-                else:
+                if "/Name" in decodeParams or "/Type" in decodeParams:
                     raise NotImplementedError("/Crypt filter with /Name or /Type not supported yet")
             else:
                 # unsupported filter

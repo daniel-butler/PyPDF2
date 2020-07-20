@@ -63,7 +63,7 @@ if __name__ == "__main__":
         output = os.fdopen(stdout.fileno(), "wb")
 
     merger = PdfFileMerger()
-    in_fs = dict()
+    in_fs = {}
     try:
         for (filename, page_range) in filename_page_ranges:
             if args.verbose:

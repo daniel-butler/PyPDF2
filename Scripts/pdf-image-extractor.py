@@ -5,6 +5,7 @@ Adapted from work by Sylvain Pelissier
 http://stackoverflow.com/questions/2693820/extract-images-from-pdf-without-resampling-in-python
 '''
 
+
 import sys
 import PyPDF2
 from PIL import Image
@@ -26,11 +27,7 @@ if __name__ == '__main__':
             if xObject[obj]['/Subtype'] == '/Image':
                 size = (xObject[obj]['/Width'], xObject[obj]['/Height'])
                 data = xObject[obj].getData()
-                if xObject[obj]['/ColorSpace'] == '/DeviceRGB':
-                    mode = "RGB"
-                else:
-                    mode = "P"
-                
+                mode = "RGB" if xObject[obj]['/ColorSpace'] == '/DeviceRGB' else "P"
                 if '/Filter' in xObject[obj]:
                     if xObject[obj]['/Filter'] == '/FlateDecode':
                         img = Image.frombytes(mode, size, data)

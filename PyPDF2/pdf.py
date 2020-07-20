@@ -36,6 +36,7 @@ A pure-Python PDF library with an increasing number of capabilities.
 See README for links to FAQ, documentation, homepage, etc.
 """
 
+
 __author__ = "Mathieu Fenniak"
 __author_email__ = "biziqe@mathieu.fenniak.net"
 
@@ -50,12 +51,10 @@ import uuid
 from sys import version_info
 if version_info < ( 3, 0 ):
     from cStringIO import StringIO
+    BytesIO = StringIO
 else:
     from io import StringIO
 
-if version_info < ( 3, 0 ):
-    BytesIO = StringIO
-else:
     from io import BytesIO
 
 from . import filters
@@ -344,12 +343,13 @@ class PdfFileWriter(object):
         writer_num_pages = self.getNumPages()
 
         # Copy pages from reader to writer
-        for rpagenum in range(0, reader_num_pages):
+        for rpagenum in range(reader_num_pages):
             reader_page = reader.getPage(rpagenum)
             self.addPage(reader_page)
-            writer_page = self.getPage(writer_num_pages+rpagenum)
             # Trigger callback, pass writer page as parameter
-            if callable(after_page_append): after_page_append(writer_page)
+            if callable(after_page_append):
+                writer_page = self.getPage(writer_num_pages+rpagenum)
+                after_page_append(writer_page)
 
     def updatePageFormFieldValues(self, page, fields):
         '''
@@ -362,8 +362,8 @@ class PdfFileWriter(object):
             values (/V)
         '''
         # Iterate through pages, update field values
-        for j in range(0, len(page['/Annots'])):
-            writer_annot = page['/Annots'][j].getObject()
+        for item in page['/Annots']:
+            writer_annot = item.getObject()
             for field in fields:
                 if writer_annot.get('/T') == field:
                     writer_annot.update({
@@ -409,7 +409,7 @@ class PdfFileWriter(object):
             this flag is on.
         """
         import time, random
-        if owner_pwd == None:
+        if owner_pwd is None:
             owner_pwd = user_pwd
         if use_128bit:
             V = 2
@@ -564,18 +564,16 @@ class PdfFileWriter(object):
         elif isinstance(data, IndirectObject):
             # internal indirect references are fine
             if data.pdf == self:
-                if data.idnum in self.stack:
-                    return data
-                else:
+                if data.idnum not in self.stack:
                     self.stack.append(data.idnum)
                     realdata = self.getObject(data)
                     self._sweepIndirectReferences(externMap, realdata)
-                    return data
+                return data
             else:
                 if data.pdf.stream.closed:
                     raise ValueError("I/O operation on closed file: {}".format(data.pdf.stream.name))
                 newobj = externMap.get(data.pdf, {}).get(data.generation, {}).get(data.idnum, None)
-                if newobj == None:
+                if newobj is None:
                     try:
                         newobj = data.pdf.getObject(data)
                         self._objects.append(None) # placeholder
@@ -659,7 +657,7 @@ class PdfFileWriter(object):
 
         outlineRef = self.getOutlineRoot()
 
-        if parent == None:
+        if parent is None:
             parent = outlineRef
 
         parent = parent.getObject()
@@ -685,7 +683,7 @@ class PdfFileWriter(object):
 
         outlineRef = self.getOutlineRoot()
 
-        if parent == None:
+        if parent is None:
             parent = outlineRef
 
         parent = parent.getObject()
@@ -726,7 +724,7 @@ class PdfFileWriter(object):
 
         outlineRef = self.getOutlineRoot()
 
-        if parent == None:
+        if parent is None:
             parent = outlineRef
 
         bookmark = TreeObject()
@@ -795,8 +793,8 @@ class PdfFileWriter(object):
             to ignore ByteString Objects.
         """
         pages = self.getObject(self._pages)['/Kids']
-        for j in range(len(pages)):
-            page = pages[j]
+        for page_ in pages:
+            page = page_
             pageRef = self.getObject(page)
             content = pageRef['/Contents'].getObject()
             if not isinstance(content, ContentStream):
@@ -805,36 +803,70 @@ class PdfFileWriter(object):
             _operations = []
             seq_graphics = False
             for operands, operator in content.operations:
-                if operator == b_('Tj'):
+                if (
+                    operator == b_('Tj')
+                    or operator != b_('Tj')
+                    and operator == b_("'")
+                ):
                     text = operands[0]
-                    if ignoreByteStringObject:
-                        if not isinstance(text, TextStringObject):
-                            operands[0] = TextStringObject()
-                elif operator == b_("'"):
-                    text = operands[0]
-                    if ignoreByteStringObject:
-                        if not isinstance(text, TextStringObject):
-                            operands[0] = TextStringObject()
-                elif operator == b_('"'):
+                    if ignoreByteStringObject and not isinstance(
+                        text, TextStringObject
+                    ):
+                        operands[0] = TextStringObject()
+                elif (
+                    operator != b_('Tj')
+                    and operator != b_("'")
+                    and operator == b_('"')
+                ):
                     text = operands[2]
-                    if ignoreByteStringObject:
-                        if not isinstance(text, TextStringObject):
-                            operands[2] = TextStringObject()
-                elif operator == b_("TJ"):
+                    if ignoreByteStringObject and not isinstance(
+                        text, TextStringObject
+                    ):
+                        operands[2] = TextStringObject()
+                elif (
+                    operator != b_('Tj')
+                    and operator != b_("'")
+                    and operator != b_('"')
+                    and operator == b_("TJ")
+                ):
                     for i in range(len(operands[0])):
-                        if ignoreByteStringObject:
-                            if not isinstance(operands[0][i], TextStringObject):
-                                operands[0][i] = TextStringObject()
+                        if ignoreByteStringObject and not isinstance(
+                            operands[0][i], TextStringObject
+                        ):
+                            operands[0][i] = TextStringObject()
 
                 if operator == b_('q'):
                     seq_graphics = True
                 if operator == b_('Q'):
                     seq_graphics = False
-                if seq_graphics:
-                    if operator in [b_('cm'), b_('w'), b_('J'), b_('j'), b_('M'), b_('d'), b_('ri'), b_('i'),
-                            b_('gs'), b_('W'), b_('b'), b_('s'), b_('S'), b_('f'), b_('F'), b_('n'), b_('m'), b_('l'),
-                            b_('c'), b_('v'), b_('y'), b_('h'), b_('B'), b_('Do'), b_('sh')]:
-                        continue
+                if seq_graphics and operator in [
+                    b_('cm'),
+                    b_('w'),
+                    b_('J'),
+                    b_('j'),
+                    b_('M'),
+                    b_('d'),
+                    b_('ri'),
+                    b_('i'),
+                    b_('gs'),
+                    b_('W'),
+                    b_('b'),
+                    b_('s'),
+                    b_('S'),
+                    b_('f'),
+                    b_('F'),
+                    b_('n'),
+                    b_('m'),
+                    b_('l'),
+                    b_('c'),
+                    b_('v'),
+                    b_('y'),
+                    b_('h'),
+                    b_('B'),
+                    b_('Do'),
+                    b_('sh'),
+                ]:
+                    continue
                 if operator == b_('re'):
                     continue
                 _operations.append((operands, operator))
@@ -850,50 +882,54 @@ class PdfFileWriter(object):
             to ignore ByteString Objects.
         """
         pages = self.getObject(self._pages)['/Kids']
-        for j in range(len(pages)):
-            page = pages[j]
+        for page_ in pages:
+            page = page_
             pageRef = self.getObject(page)
             content = pageRef['/Contents'].getObject()
             if not isinstance(content, ContentStream):
                 content = ContentStream(content, pageRef)
             for operands,operator in content.operations:
-                if operator == b_('Tj'):
+                if (
+                    operator == b_('Tj')
+                    or operator != b_('Tj')
+                    and operator == b_("'")
+                ):
                     text = operands[0]
-                    if not ignoreByteStringObject:
-                        if isinstance(text, TextStringObject):
-                            operands[0] = TextStringObject()
-                    else:
+                    if ignoreByteStringObject:
                         if isinstance(text, TextStringObject) or \
                                 isinstance(text, ByteStringObject):
                             operands[0] = TextStringObject()
-                elif operator == b_("'"):
-                    text = operands[0]
-                    if not ignoreByteStringObject:
+                    else:
                         if isinstance(text, TextStringObject):
                             operands[0] = TextStringObject()
-                    else:
-                        if isinstance(text, TextStringObject) or \
-                                isinstance(text, ByteStringObject):
-                            operands[0] = TextStringObject()
-                elif operator == b_('"'):
+                elif (
+                    operator != b_('Tj')
+                    and operator != b_("'")
+                    and operator == b_('"')
+                ):
                     text = operands[2]
-                    if not ignoreByteStringObject:
-                        if isinstance(text, TextStringObject):
-                            operands[2] = TextStringObject()
-                    else:
+                    if ignoreByteStringObject:
                         if isinstance(text, TextStringObject) or \
                                 isinstance(text, ByteStringObject):
                             operands[2] = TextStringObject()
-                elif operator == b_("TJ"):
+                    else:
+                        if isinstance(text, TextStringObject):
+                            operands[2] = TextStringObject()
+                elif (
+                    operator != b_('Tj')
+                    and operator != b_("'")
+                    and operator != b_('"')
+                    and operator == b_("TJ")
+                ):
                     for i in range(len(operands[0])):
-                        if not ignoreByteStringObject:
-                            if isinstance(operands[0][i], TextStringObject):
-                                operands[0][i] = TextStringObject()
-                        else:
+                        if ignoreByteStringObject:
                             if isinstance(operands[0][i], TextStringObject) or \
                                     isinstance(operands[0][i], ByteStringObject):
                                 operands[0][i] = TextStringObject()
 
+                        else:
+                            if isinstance(operands[0][i], TextStringObject):
+                                operands[0][i] = TextStringObject()
             pageRef.__setitem__(NameObject('/Contents'), content)
 
     def addURI(self, pagenum, uri, rect, border=None):
@@ -927,9 +963,7 @@ class PdfFileWriter(object):
 
         if isString(rect):
             rect = NameObject(rect)
-        elif isinstance(rect, RectangleObject):
-            pass
-        else:
+        elif not isinstance(rect, RectangleObject):
             rect = RectangleObject(rect)
 
         lnk2 = DictionaryObject()
@@ -994,9 +1028,7 @@ class PdfFileWriter(object):
 
         if isString(rect):
             rect = NameObject(rect)
-        elif isinstance(rect, RectangleObject):
-            pass
-        else:
+        elif not isinstance(rect, RectangleObject):
             rect = RectangleObject(rect)
 
         zoomArgs = []
@@ -1215,7 +1247,7 @@ class PdfFileReader(object):
             finally:
                 self._override_encryption = False
         else:
-            if self.flattenedPages == None:
+            if self.flattenedPages is None:
                 self._flatten()
             return len(self.flattenedPages)
 
@@ -1236,7 +1268,7 @@ class PdfFileReader(object):
         """
         ## ensure that we're not trying to access an encrypted PDF
         #assert not self.trailer.has_key("/Encrypt")
-        if self.flattenedPages == None:
+        if self.flattenedPages is None:
             self._flatten()
         return self.flattenedPages[pageNumber]
 
@@ -1266,7 +1298,7 @@ class PdfFileReader(object):
                        "/T" : "Field Name", "/TU" : "Alternate Field Name",
                        "/TM" : "Mapping Name", "/Ff" : "Field Flags",
                        "/V" : "Value", "/DV" : "Default Value"}
-        if retval == None:
+        if retval is None:
             retval = {}
             catalog = self.trailer["/Root"]
             # get the AcroForm tree
@@ -1274,7 +1306,7 @@ class PdfFileReader(object):
                 tree = catalog["/AcroForm"]
             else:
                 return None
-        if tree == None:
+        if tree is None:
             return retval
 
         self._checkKids(tree, retval, fileobj)
@@ -1342,10 +1374,11 @@ class PdfFileReader(object):
         '''
         # Retrieve document form fields
         formfields = self.getFields()
-        return dict(
-            (formfields[field]['/T'], formfields[field].get('/V')) for field in formfields \
-                if formfields[field].get('/FT') == '/Tx'
-        )
+        return {
+            formfields[field]['/T']: formfields[field].get('/V')
+            for field in formfields
+            if formfields[field].get('/FT') == '/Tx'
+        }
 
     def getNamedDestinations(self, tree=None, retval=None):
         """
@@ -1355,7 +1388,7 @@ class PdfFileReader(object):
             :class:`Destinations<PyPDF2.generic.Destination>`.
         :rtype: dict
         """
-        if retval == None:
+        if retval is None:
             retval = {}
             catalog = self.trailer["/Root"]
 
@@ -1367,7 +1400,7 @@ class PdfFileReader(object):
                 if "/Dests" in names:
                     tree = names['/Dests']
 
-        if tree == None:
+        if tree is None:
             return retval
 
         if "/Kids" in tree:
@@ -1400,7 +1433,7 @@ class PdfFileReader(object):
 
         :return: a nested list of :class:`Destinations<PyPDF2.generic.Destination>`.
         """
-        if outlines == None:
+        if outlines is None:
             outlines = []
             catalog = self.trailer["/Root"]
 
@@ -1418,8 +1451,8 @@ class PdfFileReader(object):
                     node = lines["/First"]
             self._namedDests = self.getNamedDestinations()
 
-        if node == None:
-          return outlines
+        if node is None:
+            return outlines
 
         # see if there are any more outlines
         while True:
@@ -1448,13 +1481,8 @@ class PdfFileReader(object):
                 id2num[x.indirectRef.idnum] = i
             self._pageId2Num = id2num
 
-        if isinstance(indirectRef, int):
-            idnum = indirectRef
-        else:
-            idnum = indirectRef.idnum
-
-        ret = self._pageId2Num.get(idnum, -1)
-        return ret
+        idnum = indirectRef if isinstance(indirectRef, int) else indirectRef.idnum
+        return self._pageId2Num.get(idnum, -1)
 
     def getPageNumber(self, page):
         """
@@ -1466,8 +1494,7 @@ class PdfFileReader(object):
         :rtype: int
         """
         indirectRef = page.indirectRef
-        ret = self._getPageNumberByIndirect(indirectRef)
-        return ret
+        return self._getPageNumberByIndirect(indirectRef)
 
     def getDestinationPageNumber(self, destination):
         """
@@ -1480,8 +1507,7 @@ class PdfFileReader(object):
         :rtype: int
         """
         indirectRef = destination.page
-        ret = self._getPageNumberByIndirect(indirectRef)
-        return ret
+        return self._getPageNumberByIndirect(indirectRef)
 
     def _buildDestination(self, title, array):
         page, typ = array[0:2]
@@ -1562,9 +1588,9 @@ class PdfFileReader(object):
             NameObject("/Resources"), NameObject("/MediaBox"),
             NameObject("/CropBox"), NameObject("/Rotate")
             )
-        if inherit == None:
-            inherit = dict()
-        if pages == None:
+        if inherit is None:
+            inherit = {}
+        if pages is None:
             self.flattenedPages = []
             catalog = self.trailer["/Root"].getObject()
             pages = catalog["/Pages"].getObject()
@@ -1624,8 +1650,8 @@ class PdfFileReader(object):
                 pos = streamData.tell()
                 streamData.seek(0, 0)
                 lines = streamData.readlines()
-                for i in range(0, len(lines)):
-                    print((lines[i]))
+                for line in lines:
+                    print(line)
                 streamData.seek(pos, 0)
             try:
                 obj = readObject(streamData, self)
@@ -1734,8 +1760,10 @@ class PdfFileReader(object):
     def cacheGetIndirectObject(self, generation, idnum):
         debug = False
         out = self.resolvedObjects.get((generation, idnum))
-        if debug and out: print(("cache hit: %d %d"%(idnum, generation)))
-        elif debug: print(("cache miss: %d %d"%(idnum, generation)))
+        if debug:
+            if out: print(("cache hit: %d %d"%(idnum, generation)))
+            else:
+                print(("cache miss: %d %d"%(idnum, generation)))
         return out
 
     def cacheIndirectObject(self, generation, idnum, obj):
@@ -1982,7 +2010,9 @@ class PdfFileReader(object):
             stream.seek(loc, 0) #return to where it was
 
     def _zeroXref(self, generation):
-        self.xref[generation] = dict( (k-self.xrefIndex, v) for (k, v) in list(self.xref[generation].items()) )
+        self.xref[generation] = {
+            k - self.xrefIndex: v for (k, v) in list(self.xref[generation].items())
+        }
 
     def _pairs(self, array):
         i = 0
@@ -2005,14 +2035,14 @@ class PdfFileReader(object):
             if stream.tell() < 2:
                 raise utils.PdfReadError("EOL marker not found")
             stream.seek(-2, 1)
-            if x == b_('\n') or x == b_('\r'): ## \n = LF; \r = CR
+            if x in [b_('\n'), b_('\r')]: ## \n = LF; \r = CR
                 crlf = False
-                while x == b_('\n') or x == b_('\r'):
+                while x in [b_('\n'), b_('\r')]:
                     if debug:
                         if ord(x) == 0x0D: print("  x is CR 0D")
                         elif ord(x) == 0x0A: print("  x is LF 0A")
                     x = stream.read(1)
-                    if x == b_('\n') or x == b_('\r'): # account for CR+LF
+                    if x in [b_('\n'), b_('\r')]: # account for CR+LF
                         stream.seek(-1, 1)
                         crlf = True
                     if stream.tell() < 2:
@@ -2057,7 +2087,7 @@ class PdfFileReader(object):
         encrypt = self.trailer['/Encrypt'].getObject()
         if encrypt['/Filter'] != '/Standard':
             raise NotImplementedError("only Standard PDF encryption handler is available")
-        if not (encrypt['/V'] in (1, 2)):
+        if encrypt['/V'] not in (1, 2):
             raise NotImplementedError("only algorithm code 1 and 2 are supported. This PDF uses code %s" % encrypt['/V'])
         user_password, key = self._authenticateUserPassword(password)
         if user_password:
@@ -2065,10 +2095,7 @@ class PdfFileReader(object):
             return 1
         else:
             rev = encrypt['/R'].getObject()
-            if rev == 2:
-                keylen = 5
-            else:
-                keylen = encrypt['/Length'].getObject() // 8
+            keylen = 5 if rev == 2 else encrypt['/Length'].getObject() // 8
             key = _alg33_1(password, rev, keylen)
             real_O = encrypt["/O"].getObject()
             if rev == 2:
@@ -2077,8 +2104,8 @@ class PdfFileReader(object):
                 val = real_O
                 for i in range(19, -1, -1):
                     new_key = b_('')
-                    for l in range(len(key)):
-                        new_key += b_(chr(utils.ord_(key[l]) ^ i))
+                    for item in key:
+                        new_key += b_(chr(utils.ord_(item) ^ i))
                     val = utils.RC4_encrypt(new_key, val)
                 userpass = val
             owner_password, key = self._authenticateUserPassword(userpass)
@@ -2120,7 +2147,7 @@ def getRectangle(self, name, defaults):
     retval = self.get(name)
     if isinstance(retval, RectangleObject):
         return retval
-    if retval == None:
+    if retval is None:
         for d in defaults:
             retval = self.get(d)
             if retval != None:
@@ -2957,7 +2984,7 @@ def _alg32(password, rev, keylen, owner_entry, p_entry, id1_entry, metadata_encr
     # encryption key as defined by the value of the encryption dictionary's
     # /Length entry.
     if rev >= 3:
-        for i in range(50):
+        for _ in range(50):
             md5_hash = md5(md5_hash[:keylen]).digest()
     # 9. Set the encryption key to the first n bytes of the output from the
     # final MD5 hash, where n is always 5 for revision 2 but, for revision 3 or
@@ -2986,8 +3013,8 @@ def _alg33(owner_pwd, user_pwd, rev, keylen):
     if rev >= 3:
         for i in range(1, 20):
             new_key = ''
-            for l in range(len(key)):
-                new_key += chr(ord_(key[l]) ^ i)
+            for item in key:
+                new_key += chr(ord_(item) ^ i)
             val = utils.RC4_encrypt(new_key, val)
     # 8. Store the output from the final invocation of the RC4 as the value of
     # the /O entry in the encryption dictionary.
@@ -3059,8 +3086,8 @@ def _alg35(password, rev, keylen, owner_entry, p_entry, id1_entry, metadata_encr
     # counter (from 1 to 19).
     for i in range(1, 20):
         new_key = b_('')
-        for l in range(len(key)):
-            new_key += b_(chr(ord_(key[l]) ^ i))
+        for item in key:
+            new_key += b_(chr(ord_(item) ^ i))
         val = utils.RC4_encrypt(new_key, val)
     # 6. Append 16 bytes of arbitrary padding to the output from the final
     # invocation of the RC4 function and store the 32-byte result as the value
